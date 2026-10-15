@@ -1,145 +1,179 @@
 title: Xtend Heatpump
-path: Xtend_Heatpump
+path: xtend-heatpump
 icon: mdi:heat-pump-outline
 type: sections
 max_columns: 3
 sections:
   - type: grid
     cards:
-      - type: entities
-        entities:
-          - entity: sensor.xtend_roomtemperature_1
-            name: Room
-          - entity: sensor.xtend_roomtemperature_set_1
-            name: Target
-          - entity: sensor.xtend_toutdoor
-            name: Outside
-        title: Temperatures
-      - type: entities
-        entities:
-          - entity: sensor.xtend_systemstatus
-            name: System Status
-          - entity: sensor.xtend_startheatingcounter
-            name: Compressor Starts
-          - entity: sensor.xtend_operationheatinghours
-            name: Runtime
-          - entity: sensor.xtend_poweron_hours
-            name: Hours on Power
-          - entity: sensor.xtend_poweron_number
-            name: Power Cycles
-          - entity: sensor.xtend_startdefrostcounter
-            name: Defrost Cycles
-          - entity: sensor.xtend_software_version
-            name: Software Version
-        title: Heatpump Summary
-  - type: grid
-    cards:
-      - type: markdown
-        content: >-
-          ### <center> Last updated on {{
-          as_timestamp(states.sensor.intergas_xtend.last_updated) |
-          timestamp_custom('%d-%b-%Y %H:%M:%S', true) }}
-      - type: entities
-        entities:
-          - entity: sensor.xtend_notification_code
-        state_color: true
+      - type: heading
+        heading: Heat pump
+        icon: mdi:heat-pump-outline
+      # Alerts: only visible when the Xtend reports something
+      - type: tile
+        entity: sensor.xtend_notification_code
+        name: Notification
+        color: amber
+        grid_options:
+          columns: 12
         visibility:
           - condition: state
             entity: sensor.xtend_notification_code
-            state: ""
-        header:
-          type: picture
-          image: >-
-            https://upload.wikimedia.org/wikipedia/commons/7/7b/Attention_Sign.svg
-          tap_action:
-            action: none
-          hold_action:
-            action: none
-      - type: vertical-stack
-        cards:
-          - type: custom:bignumber-card
-            title: Current Power
-            entity: sensor.xtend_currentpowerelectric
-            scale: 20px
-          - type: custom:bignumber-card
-            title: Current Thermal
-            entity: sensor.xtend_currenthppowerthermal
-            scale: 20px
-          - type: gauge
-            name: Currentl CoP
-            entity: sensor.xtend_currentcop
-            min: 0
-            max: 12
-            severity:
-              green: 5
-              yellow: 2.5
-              red: 0
-            needle: true
-        layout_options:
-          grid_columns: 2
-          grid_rows: auto
-      - type: vertical-stack
-        cards:
-          - type: custom:bignumber-card
-            title: Overall power
-            entity: sensor.xtend_electricenergyheating
-            scale: 20px
-          - type: custom:bignumber-card
-            title: Overall thermal
-            entity: sensor.xtend_thermalenergyheating
-            scale: 20px
-          - type: gauge
-            name: Overall CoP
-            entity: sensor.xtend_cop_total
-            min: 0
-            max: 12
-            severity:
-              green: 5
-              yellow: 2.5
-              red: 0
-            needle: true
-        layout_options:
-          grid_columns: 2
-          grid_rows: auto
-      - type: horizontal-stack
-        cards:
-          - type: custom:bignumber-card
-            title: Supply temp
-            entity: sensor.xtend_thpsupply
-            scale: 20px
-          - type: custom:bignumber-card
-            title: Delta T
-            entity: sensor.xtend_deltat
-            scale: 20px
-          - type: custom:bignumber-card
-            title: Return temp
-            entity: sensor.xtend_thpreturn
-            scale: 20px
+            state_not: ["-", unavailable, unknown]
+      - type: tile
+        entity: sensor.xtend_errorcode
+        name: Error
+        color: red
+        grid_options:
+          columns: 12
+        visibility:
+          - condition: state
+            entity: sensor.xtend_errorcode
+            state_not: ["-", no_error, unavailable, unknown]
+      - type: tile
+        entity: sensor.xtend_lockout_code
+        name: Lockout
+        color: red
+        grid_options:
+          columns: 12
+        visibility:
+          - condition: state
+            entity: sensor.xtend_lockout_code
+            state_not: ["-", unavailable, unknown]
+      - type: tile
+        entity: sensor.xtend_systemstatus
+        name: System status
+      - type: tile
+        entity: sensor.xtend_heatdemand_status
+        name: Device status
+      - type: tile
+        entity: sensor.xtend_heatpumpmode
+        name: Heat demand
+      - type: tile
+        entity: sensor.xtend_workingmode
+        name: Operational mode
+      - type: tile
+        entity: sensor.xtend_roomtemperature_1
+        name: Room
+        grid_options:
+          columns: 4
+      - type: tile
+        entity: sensor.xtend_roomtemperature_set_1
+        name: Target
+        grid_options:
+          columns: 4
+      - type: tile
+        entity: sensor.xtend_toutdoor
+        name: Outside
+        grid_options:
+          columns: 4
+      - type: tile
+        entity: sensor.intergas_xtend
+        name: Xtend connection
+        icon: mdi:wifi
+        state_content:
+          - state
+          - last_updated
+        grid_options:
+          columns: 12
       - type: entities
+        title: Heat pump summary
         entities:
-          - entity: sensor.xtend_currentpowerthermal
-          - entity: sensor.xtend_currentboilerpowerthermal
-          - entity: sensor.xtend_thermalenergyboiler
-        state_color: true
-        title: Energy performance
+          - entity: sensor.xtend_startheatingcounter
+            name: Compressor starts
+          - entity: sensor.xtend_operationheatinghours
+            name: Runtime
+          - entity: sensor.xtend_poweron_hours
+            name: Hours on power
+          - entity: sensor.xtend_poweron_number
+            name: Power cycles
+          - entity: sensor.xtend_startdefrostcounter
+            name: Defrost cycles
+          - entity: sensor.xtend_software_version
+            name: Software version
+
   - type: grid
     cards:
+      - type: heading
+        heading: Performance
+        icon: mdi:chart-line
+      - type: sensor
+        entity: sensor.xtend_currentpowerelectric
+        name: Electric power
+        graph: line
+        hours_to_show: 24
+      - type: sensor
+        entity: sensor.xtend_currenthppowerthermal
+        name: Heat pump thermal
+        graph: line
+        hours_to_show: 24
+      - type: gauge
+        entity: sensor.xtend_currentcop
+        name: Current COP
+        unit: " "
+        min: 0
+        max: 12
+        needle: true
+        severity:
+          green: 5
+          yellow: 2.5
+          red: 0
+      - type: gauge
+        entity: sensor.xtend_cop_total
+        name: Overall COP
+        unit: " "
+        min: 0
+        max: 12
+        needle: true
+        severity:
+          green: 5
+          yellow: 2.5
+          red: 0
+      - type: tile
+        entity: sensor.xtend_thpsupply
+        name: Supply
+        grid_options:
+          columns: 4
+      - type: tile
+        entity: sensor.xtend_deltat
+        name: Delta T
+        grid_options:
+          columns: 4
+      - type: tile
+        entity: sensor.xtend_thpreturn
+        name: Return
+        grid_options:
+          columns: 4
+      - type: tile
+        entity: sensor.xtend_electricenergyheating
+        name: Electric energy
+      - type: tile
+        entity: sensor.xtend_thermalenergyheating
+        name: Thermal energy HP
+      - type: tile
+        entity: sensor.xtend_thermalenergyboiler
+        name: Thermal energy boiler
+      - type: tile
+        entity: sensor.xtend_thermal_total
+        name: Thermal energy total
+      - type: tile
+        entity: sensor.xtend_currentpowerthermal
+        name: Thermal power total
+      - type: tile
+        entity: sensor.xtend_currentboilerpowerthermal
+        name: Thermal power boiler
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Heat pump live data
+        icon: mdi:heat-pump
       - type: entities
         entities:
-          - entity: sensor.xtend_heatpumpmode
-            name: Heat Demand
-          - entity: sensor.xtend_heatdemand_status
-            name: Device Status
-          - entity: sensor.xtend_workingmode
-            name: Operational Mode
           - entity: sensor.xtend_water_pressure
             name: Pressure
           - entity: sensor.xtend_fsystem
             name: Flow
-          - entity: sensor.xtend_thpreturn
-            name: Return
-          - entity: sensor.xtend_thpsupply
-            name: Supply
           - entity: sensor.xtend_requestedtemperature
             name: Setpoint
           - entity: sensor.xtend_exhaustpressure
@@ -150,30 +184,27 @@ sections:
             name: Exhaust gas temperature
           - entity: sensor.xtend_suctiontemperature
             name: Suction line gas temperature
-          - entity: sensor.xtend_temperaturecondensor_refrigrerant_gas
-            name: T condensor Gas
-          - entity: sensor.xtend_temperaturecondensor_refrigrerant_liquid
-            name: T condensor Liquid
-          - entity: sensor.xtend_suctionoverheat
-            name: Suction line Overheat
-          - entity: sensor.xtend_exhaustoverheat
-            name: Discharge Overheat
-          - entity: sensor.xtend_temperaturesubcooling
-            name: Subcooling
           - entity: sensor.xtend_coiltemperature
             name: Coil temperature
+          - entity: sensor.xtend_temperaturecondensor_refrigrerant_gas
+            name: T condensor gas
+          - entity: sensor.xtend_temperaturecondensor_refrigrerant_liquid
+            name: T condensor liquid
+          - entity: sensor.xtend_suctionoverheat
+            name: Suction line overheat
+          - entity: sensor.xtend_exhaustoverheat
+            name: Discharge overheat
+          - entity: sensor.xtend_temperaturesubcooling
+            name: Subcooling
           - entity: sensor.xtend_actualfrequency
-            name: Compressor Frequency
+            name: Compressor frequency
           - entity: sensor.xtend_actualfan1speed
-            name: Fan Speed
+            name: Fan speed
           - entity: sensor.xtend_eevsteps
-            name: Eev Position
+            name: EEV position
           - entity: sensor.xtend_lockout_code
-            name: Lockout Code
+            name: Lockout code
           - entity: sensor.xtend_notification_code
-            name: Notification Code
+            name: Notification code
           - entity: sensor.xtend_errorcode
-            name: Error Code
-        title: Heatpump live data
-cards: []
-background: {}
+            name: Error code

@@ -3,10 +3,28 @@
 An HowTo article on connecting the Intergas Xtend hybrid heatpump to Home Assistant (HA) via wifi network adapter (multi homed) in three steps:
 
 1. Connect HA to Xtend via Wifi
-1. Configure HA templates for Xtend
+1. Install the Xtend package in HA
 1. Create a Xtend Dashboard
 
 Hope it helps it in your journey.
+
+> [!NOTE]
+> This is a fork of [DSchoutsen/HA_connection_Xtend](https://github.com/DSchoutsen/HA_connection_Xtend), updated and tested for **Home Assistant 2026.10**. All credits for the original work and the Xtend field research go to Dennis Schoutsen.
+>
+> **Changes in this fork**
+>
+> * **One package file** ([config/packages/intergas_xtend.yaml](config/packages/intergas_xtend.yaml)) instead of separate sensor and template files.
+> * **One API request** for heat pump *and* boiler data. The original polled the Xtend twice (`Intergas_Xtend` + `Intergas_Xtreme`), which adds load on the Xtend.
+> * **Fixed: boiler gas meter** (`xtreme_gas_meter_ch`) never had data, because field `7191` was not requested.
+> * **Fixed: field `848e`** (boiler modulation level set) is no longer requested. It is known to break the API connection (upstream issue #9), and was still in the boiler request. The sensor `xtreme_boiler_ot_modulation_level_set` is removed.
+> * **Availability templates on every sensor.** When the Xtend Wi-Fi drops, sensors become *unavailable* instead of filling the log with template errors. Energy counters can no longer drop to 0 and create false spikes in statistics.
+> * **32767** (the Xtend's "no value" for 16-bit fields) is shown as *unavailable* instead of e.g. 327.67 °C.
+> * **Fixed: Delta T** was rounded down to whole degrees.
+> * **Correct units and device classes**: `kW` instead of `KW`, `Hz` instead of `hertz`, pressure/flow/frequency/power classes, and `state_class` on all measurements for long-term statistics.
+> * **Energy dashboard ready**: electric and thermal energy use device class `energy`, the boiler gas meter uses device class `gas`.
+> * **Dashboards without HACS**: only built-in cards (tile, sensor, gauge, heading), and the alert tiles now actually appear when the Xtend reports a notification, error or lockout.
+>
+> Entity IDs and unique IDs are unchanged, so existing dashboards and history keep working.
 
 ## Connect HA to Xend via Wifi
 
@@ -43,102 +61,66 @@ Follow these steps to connect HA to the Xtend:
 
   ![HA_wifiIpInformation](images/HA_wifiIpInformation.jpg)
 
-## Configure HA templates for Xtend
+> [!TIP]
+> The Xtend Wi-Fi network has no internet. Make sure the Ethernet adapter stays the default route, otherwise other integrations may lose internet access (upstream issue #8). Do not set a gateway or DNS server on the Wi-Fi adapter.
 
-Next step is to extract the data from the Xtend API. To make it easy (for me) I split my HA configuration in different files. For more information read the article [Splitting the Configuration](https://www.home-assistant.io/docs/configuration/splitting_configuration/)
+## Install the Xtend package in HA
 
-> [!NOTE]
-> You can use the files in this repository in the Config folder or you can copy the content into your own HA configuration setup as you prefer.
+All Xtend configuration is in one [Home Assistant package](https://www.home-assistant.io/docs/configuration/packages/): [config/packages/intergas_xtend.yaml](config/packages/intergas_xtend.yaml). It contains:
 
-### Sensor configuration
+* one REST sensor `sensor.intergas_xtend` that reads all fields from the Xtend API every 2 minutes, and stores them in its `stats` attribute;
+* template sensors that turn those raw values into separate entities (`sensor.xtend_*` for the heat pump, `sensor.xtreme_*` for the OpenTherm boiler data);
+* two binary sensors that show whether the heat pump and the boiler are running.
 
-In the folder _/config/sensors/_ I configured my custom data sources in seperate yaml files. In my _configuration.yaml_ i changed the sensor line with this:
+Follow these steps:
 
-```yml
-    sensor: !include_dir_merge_list sensors
-```
+1. Enable packages. Add this to your _configuration.yaml_ (if you already have a `homeassistant:` section, add only the `packages:` line to it):
 
-This line combines all .yaml files in the _sensors_ folder into one configuration for sensors.
+   ```yml
+   homeassistant:
+     packages: !include_dir_named packages
+   ```
 
-The sensor folder contains a .yaml file (e.g. [sensor_intergas_Xtend.yaml](config/sensors/sensor_intergas_Xtend.yaml)) with these lines:
+1. Create the folder _/config/packages/_ and copy [intergas_xtend.yaml](config/packages/intergas_xtend.yaml) into it. The [VS Code Server](https://github.com/hassio-addons/addon-vscode) or [File editor](https://github.com/home-assistant/addons/tree/master/configurator) add-on makes this easy.
+1. In HA open _Developer Tools_ / _YAML_ and click on _Check configuration_.
+1. When it reports _Configuration will not prevent Home Assistant from starting!_, click _Restart_.
+1. In _Developer Tools_ / _States_ filter on _intergas_xtend_. The state is `Ok`, and the `stats` attribute shows the values from the Xtend:
 
-```yml
-- platform: rest
-  name: Intergas_Xtend
-  unique_id: 71298044-d08d-494c-a415-41a72b4a3aaa
-  resource: http://10.20.30.1/api/stats/values?fields=7e7a,77dd,79b3,7940,7921,50f2,503e,5041,5088,5077,63f0,63b3,63df,6a8e,6ac5,71a7,7160,777d,6a53,65b0,6579,7ed3,629c,6280,62e7,7767,65d9,6505,7e51,65c1,6cfb,6c33,65a7,6c8a,6578,6c66,62d1,7e2c,4133,6c53,6c26,6ceb,7ee6,47e0,8e1e,8ecc,8edb,8ecb,8e37,8e7f,8e8f,8ef9,8e00,8e38,8457,8415,841f,848e,841b,8434,84d1,844c
-  scan_interval: 120
-  value_template: "Ok"
-  timeout: 30
-  json_attributes:
-    - stats
-```
+   ![States in Developer Tools ](images/HA_DevelopertoolsStates.jpg)
 
-This sensor retrieves every 2 minutes (120 seconds) the specified sensordata from the Xtend API.
+1. Filter on _xtend__ and _xtreme__ to see all the new entities.
+
+   ![image](images/HA_entities.jpg)
 
 > [!NOTE]
 >
-> * The fields in the URL above are the entities used on the Xtend dashboard described in a paragraph below. No need to request more fields then neccesary.
-> * If you want to use Opentherm boiler data as well, you also need to add the [sensor_intergas_xtreme.yaml](/config/sensors/sensor_intergas_xtreme.yaml) to the _sensors_ folder.
-> * There are a lot more fields available from the Xtend API. See the file [Known Xtend Codes](Known_Xtend_codes.md) or [parse-message.js](https://github.com/thomasvt1/xtend-bridge/blob/main/parse-message.js) from thomasvt1
+> * **Coming from the original split files?** First remove _sensors/sensor_intergas_Xtend.yaml_, _sensors/sensor_intergas_xtreme.yaml_, _templates/template_intergas_Xtend.yaml_ and _templates/template_intergas_Xtreme.yaml_. The unique IDs are the same, so your entities and their history are kept. Afterwards delete the old `sensor.intergas_xtreme` entity in _Settings / Entities_.
+> * **No OpenTherm boiler data** (e.g. some Kompakt HRE boilers): remove the fields `623c,625b,7191,7e7a,8434,844c,84d1,8e00,8e18,8e1e,8e37,8e7f,8e8f,8ecb,8ecc,8edb,8ef9` from the `resource` URL, and the sensors under _Boiler (OpenTherm) data_. Otherwise those sensors simply stay unavailable.
+> * There are a lot more fields available from the Xtend API. See the file [Known Xtend Codes](Known_Xtend_codes.md) or [parse-message.js](https://github.com/thomasvt1/xtend-bridge/blob/main/parse-message.js) from thomasvt1. Request only the fields you use: more fields means more load on the Xtend.
 
 > [!TIP]
 > Don't configure a scan interval above 300 (5 min). In my experience the wifi connection will disconnect due to inactivity and you need to repeat the previous paragraph, including climbing the stairs to push the button on the Xtend.
 > Don't configure it too low as well or it will flood your HA database and (maybe) the storage capacity of your HA device.
 
-To activate the sensor follow these steps:
+### Troubleshooting
 
-* Copy the [sensor_intergas_Xtend.yaml](config/sensors/sensor_intergas_Xtend.yaml) in the config / sensors folder
-* change the **sensor:** line in the _configuration.yaml_ as above
-* In HA click on _Developer Tools_
-* Click on _Check configuration_
-* When it reports a green message like _Configuration will not prevent Home Assistant from starting!_ you can continue.
-* Load the new configuration with _Restart HA_ (mandatory for changes in _configuration.yaml_).
-* In _Developer Tools_ click on the Tab _States_ and filter on the name of the sensor, in my case _intergas_xtend_.
-* You should get a result like the image below
+* **All Xtend sensors are unavailable**: check the Wi-Fi connection to the Xtend first. From the VS Code Server / Terminal add-on, run `curl "http://10.20.30.1/api/stats/values?fields=47e0"`. It should return the software version.
+* **Sensors drop out after a while**: some users reported fields that break the connection on their Xtend (for example `5077` and `6505`, upstream issue #9). Remove a field from the `resource` URL to test. Power-cycling the Xtend (30 seconds) also helps.
+* **Database size**: `sensor.intergas_xtend` stores all raw values as an attribute every 2 minutes. If you don't need its history, exclude it from the [recorder](https://www.home-assistant.io/integrations/recorder/):
 
-![States in Developer Tools ](images/HA_DevelopertoolsStates.jpg)
+  ```yml
+  recorder:
+    exclude:
+      entities:
+        - sensor.intergas_xtend
+  ```
 
-### Template configuration
+### Energy dashboard
 
-Now we have the Xtend sensordata in HA we need to make sense of it by seperating the values into seperate entities. This is where the templates come in.
+In _Settings / Dashboards / Energy_ you can add:
 
-Just like with the sensor configuration, I have the template files seperated by Data Source in a templates folder. In my _configuration.yaml_ the tempate line look like this:
-
-```yml
-    template: !include_dir_merge_list templates
-```
-
-The templates folder contains a .yaml file (e.g. template_intergas_Xtend.yaml) with lines like below. For the complete list of entities see [template_intergas_Xtend.yaml](config/templates/template_intergas_Xtend.yaml)
-
-```yml
-- sensor:
-    - name: xtend_software_version
-      unique_id: f2f4dfc0-0c38-4350-8463-7c1809a77dd1
-      state: >
-        {{ state_attr('sensor.Intergas_Xtend', 'stats')['47e0']}}
-
-    - name: xtend_currentHpPowerThermal
-      unique_id: 2d3ec316-ab0e-4e95-b909-2a80110f149b
-      unit_of_measurement: "KW"
-      state: >
-        {{ state_attr('sensor.Intergas_Xtend', 'stats')['503e'] | float / 1000}}
-
-    - name: xtend_currentCop
-      unique_id: faa0c93c-5f46-4ff7-b9ce-bb609af880de
-      state: >
-        {{ state_attr('sensor.Intergas_Xtend', 'stats')['5041'] | float / 10 }}
-```
-
-> [!NOTE]
->
-> * If you want to use Opentherm boiler data as well, you also need to add the [template_intergas_xtreme.yaml](/config/templates/template_intergas_xtreme.yaml) to the _templates_ folder.
-
-To load this template in HA repeat the steps in the _Developer Tools_ like described in the paragraph _Sensor configuration_. You can also use the _Template entities_ button in the section _Developer Tools/YAML/YAML configuration reloading_.
-
-When you succesfully load the template file you will see the entities appear in HA. It should look something like the image below.
-
-![image](images/HA_entities.jpg)
+* `sensor.xtend_electricenergyheating` as an individual device (electricity used by the heat pump);
+* `sensor.xtreme_gas_meter_ch` under gas consumption (gas used by the boiler for central heating).
 
 ## Create a Xtend Dashboard
 
@@ -147,28 +129,25 @@ So far so good .... it's time to use the obtained data in a dashboard.
 > [!NOTE]
 >
 > * This example dashboard is inspired by the Statistics page on the Xtend webinterface. As noted before it is possible to retrieve other fields from the Xtend API and present these on the Xtend dashboard.
-> * The dashboard is created on HA 2024.7.x and uses the new (experimental) Section View Type. Read the [HA blog](https://www.home-assistant.io/blog/2024/03/04/dashboard-chapter-1) for more info.
-> * This dashboard uses a custom Card from HACS: [custom:bignumber-card](https://github.com/custom-cards/bignumber-card) Install this integration before importing the Dashboard code.
-> * I haven't got time to get to the boiler information yet.
-> * The Xtend provide a weird value of **32767** (maximum Integer value) for pressures and temperatures. I suspect these mean _Not available_ but will contact Intergas to make sure.
+> * The dashboards use the Sections view and only built-in cards. No HACS cards are needed.
+> * The Xtend provide a weird value of **32767** (maximum Integer value) for pressures and temperatures. These sensors show as _unavailable_ in that case.
 
-My Xtend Heatpump dashboard looks like this. The room in the 2nd column is for a hidden notification card, that only appears when there is a notification, other than '-'.
+There are two dashboards. One with [Xtend heat pump and OpenTherm boiler data](Xtend_boiler_dashboard.yaml) and one with only the [Xtend heatpump data](Xtend_dashboard.yaml). The notification, error and lockout tiles only appear when the Xtend reports something.
 
 ![XtendDash](images/HA_Xtend_boiler_dashboard.png)
 
 > [!NOTE]
 >
-> * These screenshots are taken just after the Xtend was installed in Summer!. The CoP of 13 is a result of some test runs and not a realistic value. :sunglasses:
-> * In the config folder I added two dashboards. One with [Opentherm boiler data](Xtend_boiler_dashboard.yaml) and one with only the [Xtend heatpump data](Xtend_dashboard.yaml).
-> * The hidden notification card is added in both dashboard. You can view this card in the _Edit dashboard_ mode.
+> * This screenshot shows the original dashboard. The layout of the updated dashboard is similar, with built-in tiles instead of big number cards.
+> * The screenshot was taken just after the Xtend was installed in Summer!. The CoP of 13 is a result of some test runs and not a realistic value. :sunglasses:
 
 Follow these steps to import this dashboard in your HA.
 
 * Open the Overview page in HA and click on the pencil in the top right corner (Edit Dashboard)
-* Click on the plus-sign to add a new dashboard
+* Click on the plus-sign to add a new view
 * In the new window _View Configuration_ click on the three-dot menu in the top right corner and select _Edit in YAML_
   ![Edit in yaml](images/HA_newdashyaml.png)
-* Copy the text from [Xtend_Dashboard.yaml](Xtend_dashboard.yaml) or [Xtend_boiler_dashboard.yaml](Xtend_boiler_dashboard.yaml) and Paste the yaml code in the _View configuration_ Window
+* Copy the text from [Xtend_dashboard.yaml](Xtend_dashboard.yaml) or [Xtend_boiler_dashboard.yaml](Xtend_boiler_dashboard.yaml) and Paste the yaml code in the _View configuration_ Window
   ![image](images/HA_DashboardYaml.png)
 * Click on _Save_
 * Click on _Done_
