@@ -26,6 +26,14 @@ Hope it helps it in your journey.
 >
 > Entity IDs and unique IDs are unchanged, so existing dashboards and history keep working.
 
+## Two ways to connect
+
+* **A. Home Assistant joins the Xtend Wi-Fi** (the original approach, described below). Needs a second (Wi-Fi) network adapter on your HA machine, within range of the Xtend.
+* **B. ESPHome bridge.** An ESP32 board with Ethernet next to the Xtend connects to the Xtend Wi-Fi and passes the data to Home Assistant over the network cable. Use this when Home Assistant is too far from the Xtend or has no free Wi-Fi adapter. See [ESPHome bridge](#esphome-bridge).
+
+> [!NOTE]
+> **Xtend Eco and your home Wi-Fi.** The Xtend Eco can also join your home Wi-Fi (web interface, _Verbindingen / Lokaal wifinetwerk_). Intergas uses that connection for firmware updates and data collection. In a test with an Xtend Eco (October 2026) the web interface and the API were **not** reachable over the home network: the Xtend accepts a connection on port 80 and closes it without an answer. So you still need method A or B.
+
 ## Connect HA to Xend via Wifi
 
 The image below illustrates my setup at home. Your setup maybe different but the concepts still apply.
@@ -153,6 +161,53 @@ Follow these steps to import this dashboard in your HA.
 * Click on _Done_
 
 I hope this article has helped you monitor your Xtend's performance in a convenient way in Home Assistant.
+
+## ESPHome bridge
+
+Instead of connecting Home Assistant itself to the Xtend Wi-Fi, an ESP32 board with Ethernet can do it. The board sits next to the Xtend, joins the Xtend Wi-Fi access point, reads the same fields every 2 minutes and shows them in Home Assistant as a normal ESPHome device. Home Assistant reaches the board over the network cable, so it can be anywhere in the house.
+
+> [!NOTE]
+> Both configurations compile with ESPHome 2026.9 (no warnings), but have not been tested on a real Xtend yet. Feedback is welcome.
+
+### What you need
+
+One of these boards:
+
+| Board | Config | Notes |
+|---|---|---|
+| **[Olimex ESP32-POE-ISO](https://www.olimex.com/Products/IoT/ESP32/ESP32-POE-ISO/)** (about €25) | [esphome/xtend-bridge.yaml](esphome/xtend-bridge.yaml) | Easiest: micro-USB for the first install, PoE or micro-USB power. Use the standard or *EA* version (external antenna), **not** a *WROVER* variant (different Ethernet clock pin). |
+| **WT32-ETH01** (about €10) | [esphome/xtend-bridge-wt32-eth01.yaml](esphome/xtend-bridge-wt32-eth01.yaml) | Cheapest. No USB port: the first install needs a 3.3 V USB-TTL adapter, and power is 5 V on the pin header. |
+
+And:
+
+* A network cable from your router/switch to the Xtend location, or a powerline adapter.
+* Power: for the Olimex a PoE switch or injector (one cable for data and power), **or** a 5 V micro-USB power supply. For the WT32-ETH01 a 5 V supply on the 5V/GND pins.
+* For the first install: a micro-USB data cable (Olimex), or a 3.3 V USB-TTL adapter and jumper wires (WT32-ETH01).
+
+> [!TIP]
+> Before you buy anything, check that the Xtend keeps its Wi-Fi on while it is used: connect your phone to the Xtend Wi-Fi, open `10.20.30.1` / _Statistieken / Live data_, keep the screen on and check after 20 minutes that the LED still blinks purple.
+
+### Install
+
+1. In Home Assistant install the **ESPHome Device Builder** add-on (_Settings / Add-ons / Add-on store_).
+1. Open it, click _Secrets_ (top right) and add the entries from [esphome/secrets.example.yaml](esphome/secrets.example.yaml): the Xtend Wi-Fi name and password, and an API encryption key.
+1. Click _New device_, give it the name `xtend`, and replace the generated YAML with the config for your board (see the table above).
+1. Connect the board to the computer you use Home Assistant on, and choose _Install / Plug into this computer_ (Chrome or Edge). Later updates go over the network.
+   * **Olimex**: plug in the micro-USB cable.
+   * **WT32-ETH01**: connect the USB-TTL adapter (set to 3.3 V): adapter TX → RX0, RX → TX0, GND → GND, 5V → 5V. Connect IO0 to GND, then power up (the board starts in flash mode). After flashing, remove the IO0 wire and power-cycle the board.
+1. Place the board next to the Xtend, connect the network cable (and power), and press the button on the Xtend so its Wi-Fi turns on (LED blinks purple).
+1. Home Assistant discovers the new ESPHome device under _Settings / Devices & services_. Click _Configure_ and enter the API key.
+1. Import [Xtend_esphome_dashboard.yaml](Xtend_esphome_dashboard.yaml) as a dashboard view, the same way as described in [Create a Xtend Dashboard](#create-a-xtend-dashboard).
+
+### Good to know
+
+* The entities are named `sensor.xtend_<name>`, for example `sensor.xtend_outdoor_temperature`. Use the ESPHome dashboard, not the package dashboards.
+* Check _Xtend Wi-Fi signal_ (diagnostic): better than -75 dBm is fine. Move the board closer to the Xtend if the value is lower.
+* The bridge polls every 2 minutes (`poll_interval` at the top of the config) and retries a failed request after 30 seconds, so the Xtend Wi-Fi never goes long without a request. Keep `poll_interval` well below 5 minutes.
+* _Connection_ (diagnostic) shows whether the last requests to the Xtend succeeded. After two failed requests in a row all values become _unknown_ until the Xtend answers again.
+* After a power failure of the Xtend you may need to press its Wi-Fi button again. The bridge reconnects by itself.
+* Your home network cannot use the 10.20.30.0/24 range.
+* Do **not** install the package (method A) as well: the Xtend is then polled twice.
 
 ## Background
 
